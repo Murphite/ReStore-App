@@ -45,28 +45,42 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-string connString;
-if (builder.Environment.IsDevelopment())
-    connString = builder.Configuration.GetConnectionString("DefaultConnection");
-else
+
+string connString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+// If connString is still null, try reading it directly from the environment variables.
+if (string.IsNullOrEmpty(connString))
 {
-    // Use connection string provided at runtime by FlyIO.
-    var connUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
-
-    // Parse connection URL to connection string for Npgsql
-    connUrl = connUrl.Replace("postgres://", string.Empty);
-    var pgUserPass = connUrl.Split("@")[0];
-    var pgHostPortDb = connUrl.Split("@")[1];
-    var pgHostPort = pgHostPortDb.Split("/")[0];
-    var pgDb = pgHostPortDb.Split("/")[1];
-    var pgUser = pgUserPass.Split(":")[0];
-    var pgPass = pgUserPass.Split(":")[1];
-    var pgHost = pgHostPort.Split(":")[0];
-    var pgPort = pgHostPort.Split(":")[1];
-    var updatedHost = pgHost.Replace("flycast", "internal");
-
-    connString = $"Server={updatedHost};Port={pgPort};User Id={pgUser};Password={pgPass};Database={pgDb};";
+    connString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
 }
+
+// Only use DATABASE_URL if it's provided and we're not in Development.
+if (!builder.Environment.IsDevelopment())
+{
+    var connUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+    if (!string.IsNullOrEmpty(connUrl))
+    {
+        // Parse connection URL to connection string for Npgsql
+        connUrl = connUrl.Replace("postgres://", string.Empty);
+        var pgUserPass = connUrl.Split("@")[0];
+        var pgHostPortDb = connUrl.Split("@")[1];
+        var pgHostPort = pgHostPortDb.Split("/")[0];
+        var pgDb = pgHostPortDb.Split("/")[1];
+        var pgUser = pgUserPass.Split(":")[0];
+        var pgPass = pgUserPass.Split(":")[1];
+        var pgHost = pgHostPort.Split(":")[0];
+        var pgPort = pgHostPort.Split(":")[1];
+        var updatedHost = pgHost.Replace("flycast", "internal");
+
+        connString = $"Server={updatedHost};Port={pgPort};User Id={pgUser};Password={pgPass};Database={pgDb};";
+    }
+}
+
+if (string.IsNullOrEmpty(connString))
+{
+    throw new Exception("Connection string is not provided.");
+}
+
 builder.Services.AddDbContext<StoreContext>(opt =>
 {
     opt.UseNpgsql(connString);
